@@ -1,0 +1,685 @@
+---
+title: "Malaria in Eastern and Southern Africa"
+author: "Mahlaku Sebiloane"
+format: 
+  dashboard:
+    logo: images/LOGO_IMAGE.png
+    nav-buttons: [github]
+    github: https://github.com/YOUR_URL
+theme: lux
+grid-layout: true
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r}
+# load packages required
+
+pacman::p_load(
+  tidyverse,
+  here,
+  sf,
+  bslib,
+  bsicons,
+  rnaturalearth,
+  plotly,
+  countrycode,
+  htmltools,
+  reactable,
+  janitor,
+  gganimate,
+  viridis,
+  flexdashboard
+)
+
+
+
+# load data set
+
+malaria_cases <- read_csv(here("data/MALARIA_TOTAL_CASES.csv"))
+est_mortality <-  read_csv(here("data/MALARIA_EST_MORTALITY.csv"))
+est_incidence <- read_csv(here("data/MALARIA_EST_INCIDENCE.csv"))
+confirmed_cases <- read_csv(here("data/MALARIA_CONF_CASES.csv"))
+imported_cases <- read_csv(here("data/MALARIA_IMPORTED.csv"))
+indig_cases <- read_csv(here("data/MALARIA_INDIG.csv"))
+pf_indig_cases <- read_csv(here("data/MALARIA_PF_INDIG.csv"))
+pres_cases <- read_csv(here("data/MALARIA_PRES_CASES.csv"))
+pv_indig <- read_csv(here("data/MALARIA_PV_INDIG.csv"))
+
+
+# filter data to include eastern and southern African countries. for the purpose of this dashboard it will be limited to 4 countries (Tanzania, Uganda, Mozambique, DRC)
+
+malaria_cases_filtered <-
+  malaria_cases %>%
+  select(SpatialDimensionValueCode, TimeDim, NumericValue) %>%
+  rename(iso = SpatialDimensionValueCode,
+         year = TimeDim,
+         total_cases = NumericValue) %>%
+  filter(iso %in% c("COD", "UGA", "TZA", "MOZ"), year >= 2011 &
+           year <= 2021) %>%
+  mutate(
+    country_name = case_match(
+      iso,
+      "COD" ~ "Democratic Republic of Congo",
+      "UGA" ~ "Uganda",
+      "TZA" ~ "Tanzania",
+      "MOZ" ~ "Mozambique",
+      .default = iso
+    )
+  )
+
+est_mortality_filtered <- est_mortality %>%
+  select(SpatialDimensionValueCode, TimeDim, NumericValue) %>%
+  rename(iso = SpatialDimensionValueCode,
+         year = TimeDim,
+         mortality_rate = NumericValue) %>%
+  filter(iso %in% c("COD", "UGA", "TZA", "MOZ"), year >= 2011 &
+           year <= 2021) %>%
+  mutate(
+    country_name = case_match(
+      iso,
+      "COD" ~ "Democratic Republic of Congo",
+      "UGA" ~ "Uganda",
+      "TZA" ~ "Tanzania",
+      "MOZ" ~ "Mozambique",
+      .default = iso
+    )
+  )
+
+est_incidence_filtered <- est_incidence %>%
+  select(SpatialDimensionValueCode, TimeDim, NumericValue) %>%
+  rename(iso = SpatialDimensionValueCode,
+         year = TimeDim,
+         incidence = NumericValue) %>%
+  filter(iso %in% c("COD", "UGA", "TZA", "MOZ"), year >= 2011 &
+           year <= 2021) %>%
+  mutate(
+    country_name = case_match(
+      iso,
+      "COD" ~ "Democratic Republic of Congo",
+      "UGA" ~ "Uganda",
+      "TZA" ~ "Tanzania",
+      "MOZ" ~ "Mozambique",
+      .default = iso
+    )
+  )
+
+# calculate total cases for the year 2021
+
+total_cases_2021 <-
+  malaria_cases_filtered %>%
+  filter(year == 2021) %>%
+  summarise(Total_Cases_2021 = sum(total_cases, na.rm = TRUE)) %>%
+  pull(Total_Cases_2021)
+
+# calculate incidence for year 2021
+
+
+incidence_2021 <-
+  est_incidence_filtered %>%
+  filter(year == 2021) %>%
+  summarise(Total_incidence = sum(incidence, na.rm = TRUE)) %>%
+  pull(Total_incidence) %>%
+  round(2)
+
+
+# calculate the mortality rate
+
+mortality_2021 <-
+  est_mortality_filtered %>%
+  filter(year == 2021) %>%
+  summarise(Total_mortality = sum(mortality_rate, na.rm = TRUE)) %>%
+  pull(Total_mortality) %>%
+  round(2)
+
+```
+
+```{r}
+#plot incidence graph - overview
+
+inc_plot_data <- est_incidence_filtered %>%
+  filter(year >= 2011 & year <= 2021) %>%  # Filter for relevant years
+  group_by(year) %>%
+  summarise(incidence_rate = sum(incidence, na.rm = TRUE)) %>%  # Aggregate cases by year and country
+  ungroup()
+
+# Create the line graph
+
+ 
+inc_plot_animated <- inc_plot_data %>%
+  plot_ly(
+    x = ~year,
+    y = ~incidence_rate,
+    type = 'scatter',
+    mode = 'lines',  # Only the line, no markers
+    line = list(color = '#329ea8', width = 2)  # Customize line color and width
+  ) %>%
+  layout(
+    title = list(
+      text = "Estimated Malaria Incidence Rate",
+      x = 0.5  # Centers the title
+    ),
+    subtitle = "Eastern and Southern Region",
+    xaxis = list(title = "Year"),
+    yaxis = list(title = "Rate per 1000 population at risk")
+  )
+
+#plot mortality graph - overview
+
+
+mort_plot_data <- est_mortality_filtered %>%
+  filter(year >= 2011 & year <= 2021) %>%  # Filter for relevant years
+  group_by(year) %>%
+  summarise(mortality_rate = sum(mortality_rate, na.rm = TRUE)) %>%  # Aggregate cases by year
+  ungroup()
+
+# Create the line graph
+
+ 
+mort_plot_animated <- mort_plot_data %>%
+  plot_ly(
+    x = ~year,
+    y = ~mortality_rate,
+    type = 'scatter',
+    mode = 'lines',  # Only the line, no markers
+    line = list(color = '#a83244', width = 2)  # Customize line color and width
+  ) %>%
+  layout(
+    title = list(
+      text = "Estimated Malaria Mortality Rate",
+      x = 0.5  # Centers the title
+    ),
+    subtitle = "Eastern and Southern Region",
+    xaxis = list(title = "Year"),
+    yaxis = list(title = "Rate per 100 000 population at risk")
+  )
+
+
+```
+
+
+```{r}
+# plot for total reported cases
+
+# confirmed cases 
+
+con_cases_filtered <- confirmed_cases %>%
+  select(SpatialDimensionValueCode, TimeDim, NumericValue) %>%
+  rename(iso = SpatialDimensionValueCode,
+         year = TimeDim,
+         con_cases = NumericValue) %>%
+  filter(iso %in% c("COD", "UGA", "TZA", "MOZ"), year >= 2011 &
+           year <= 2021) %>%
+  mutate(
+    country_name = case_match(
+      iso,
+      "COD" ~ "Democratic Republic of Congo",
+      "UGA" ~ "Uganda",
+      "TZA" ~ "Tanzania",
+      "MOZ" ~ "Mozambique",
+      .default = iso
+    )
+  )
+
+
+# presumed cases 
+
+pre_cases_filtered <- pres_cases %>%
+  select(SpatialDimensionValueCode, TimeDim, NumericValue) %>%
+  rename(iso = SpatialDimensionValueCode,
+         year = TimeDim,
+         pre_cases = NumericValue) %>%
+  filter(iso %in% c("COD", "UGA", "TZA", "MOZ"), year >= 2011 &
+           year <= 2021) %>%
+  mutate(
+    country_name = case_match(
+      iso,
+      "COD" ~ "Democratic Republic of Congo",
+      "UGA" ~ "Uganda",
+      "TZA" ~ "Tanzania",
+      "MOZ" ~ "Mozambique",
+      .default = iso
+    )
+  )
+
+
+# merge the data
+
+merged_data <- con_cases_filtered %>%
+  full_join(pre_cases_filtered, by = c("iso", "year", "country_name")) %>%
+  full_join(malaria_cases_filtered, by = c("iso", "year", "country_name")) 
+
+
+# create plot data 
+
+reported_cases <- merged_data %>% 
+  filter(year >= 2011 & year <= 2021) %>% 
+  group_by(year) %>% 
+  summarise(total_reported_cases = sum(total_cases, na.rm = TRUE),
+            confirmed_cases = sum(con_cases, na.rm = TRUE),
+            presumed_cases = sum(pre_cases, na.rm = TRUE)
+            
+            
+            )
+
+
+# analyse plot 
+
+combined_plot <- reported_cases %>%
+  plot_ly() %>%
+  # Add bar graph for total reported cases
+  add_bars(
+    x = ~year,
+    y = ~total_reported_cases,
+    name = "Total Reported Cases",
+    marker = list(color = '#1d62d1', fill = '#0c0d0d')  # Light blue for bars
+  ) %>%
+  # Add line graph for confirmed cases
+  add_trace(
+    x = ~year,
+    y = ~confirmed_cases,
+    type = 'scatter',
+    mode = 'lines+markers',
+    name = "Confirmed cases",
+    line = list(color = '#3c996f', width = 2),  # Dark blue for the line
+    marker = list(size = 6, color = '#3c996f')
+  ) %>%
+  # Add line graph for presumed cases
+  add_trace(
+    x = ~year,
+    y = ~presumed_cases,
+    type = 'scatter',
+    mode = 'lines+markers',
+    name = "Presumed cases",
+    line = list(color = '#fdcb6e', width = 2),  # Yellow-orange for the line
+    marker = list(size = 6, color = '#fdcb6e')
+  ) %>%
+  layout(
+    title = list(
+      text = "Number of Reported Malaria Cases",
+      x = 0.5
+    ),
+    xaxis = list(title = "year"),
+    yaxis = list(
+      title = "Number of cases",
+      showgrid = TRUE,
+      zeroline = FALSE
+    ),
+    barmode = 'overlay',  # Overlay bars and lines
+    legend = list(
+      x = 0.8, y = 1, bgcolor = 'rgba(255,255,255,0.8)', bordercolor = 'rgba(0,0,0,0.1)'
+    ),
+    plot_bgcolor = 'white',
+    paper_bgcolor = 'white'
+  )
+
+
+# plot classification
+
+# indigenous cases
+
+indig_cases_filtered <- indig_cases %>%
+  select(SpatialDimensionValueCode, TimeDim, NumericValue) %>%
+  rename(iso = SpatialDimensionValueCode,
+         year = TimeDim,
+         indigenous_cases = NumericValue) %>%
+  filter(iso %in% c("COD", "UGA", "TZA", "MOZ"), year >= 2011 &
+           year <= 2021) %>%
+  mutate(
+    country_name = case_match(
+      iso,
+      "COD" ~ "Democratic Republic of Congo",
+      "UGA" ~ "Uganda",
+      "TZA" ~ "Tanzania",
+      "MOZ" ~ "Mozambique",
+      .default = iso
+    )
+  )
+
+
+# imported cases 
+
+imported_cases_filtered <- imported_cases %>%
+  select(SpatialDimensionValueCode, TimeDim, NumericValue) %>%
+  rename(iso = SpatialDimensionValueCode,
+         year = TimeDim,
+         imported_cases = NumericValue) %>%
+  filter(iso %in% c("COD", "UGA", "TZA", "MOZ"), year >= 2011 &
+           year <= 2021) %>%
+  mutate(
+    country_name = case_match(
+      iso,
+      "COD" ~ "Democratic Republic of Congo",
+      "UGA" ~ "Uganda",
+      "TZA" ~ "Tanzania",
+      "MOZ" ~ "Mozambique",
+      .default = iso
+    )
+  )
+
+merged_class_data <- full_join(imported_cases_filtered, indig_cases_filtered, by = c("iso", "year", "country_name"))
+
+merged_class_data_fil <- merged_class_data %>% 
+  filter(year >= 2011 & year <= 2021) %>% 
+  group_by(year) %>% 
+  summarise(imported_cases = sum(imported_cases, na.rm = TRUE),
+            indigenous_cases = sum(indigenous_cases, na.rm = TRUE)
+    
+  ) %>% 
+  ungroup()
+# PLOT STACKED 
+
+
+classification_plot <- plot_ly(data = merged_class_data_fil) %>%
+  add_bars(
+    x = ~year,
+    y = ~imported_cases,
+    name = "Imported cases",
+    marker = list(color = '#3c996f')  # Green for confirmed cases
+  ) %>%
+  add_bars(
+    x = ~year,
+    y = ~indigenous_cases,
+    name = "Indigenous cases",
+    marker = list(color = '#f39c12')  # Orange for presumed cases
+  ) %>%
+  layout(
+    title = "Number of Cases by Classiffication",
+    xaxis = list(title = "Year"),
+    yaxis = list(title = "Number of Cases"),
+    barmode = 'stack',  # Stack the columns
+    legend = list(x = 0.8, y = 1)
+  )
+
+
+```
+
+
+```{r}
+#plot line graph - countries
+
+data_for_plot <- est_incidence_filtered %>%
+  filter(year >= 2011 & year <= 2021) %>%  # Filter for relevant years (2011 & 2021)
+  group_by(country_name, year) %>%
+  summarise(incidence_rate = sum(incidence, na.rm = TRUE)) %>%  # Aggregate cases by year and country
+  ungroup()
+
+# Create the line graph
+malaria_plot <- ggplot(data_for_plot, aes(x = year, y = incidence_rate, color = country_name, group = country_name)) +
+  geom_line(linewidth = 1) +  # Add lines
+  geom_point(size = 5) +  # Add points on the line
+  labs(x = "Year",
+    y = "Estimated Incidence Rate",
+    color = "Country"
+  ) +
+  theme_minimal() +  
+  theme(
+    plot.title = element_text(size = 16, face = "bold"),
+    axis.title = element_text(size = 12),
+    axis.text = element_text(size = 10)
+  )
+
+malaria_plot_animated <- data_for_plot %>%
+  plot_ly(
+    x = ~year,
+    y = ~incidence_rate,
+    color = ~country_name,
+    frame = ~year,
+    type = 'scatter',
+    mode = 'lines+markers'
+  ) %>%
+  layout(
+    xaxis = list(title = "Year"),
+    yaxis = list(title = "Rate per 1000 population at risk")
+  )
+```
+
+
+
+
+```{r}
+#plot line graph - estimated mortality
+
+# Assuming 'est_mortality_filtered' is your dataset
+data_for_plot1 <- est_mortality_filtered %>%
+  filter(year >= 2011 &
+           year <= 2021) %>%  # Filter for relevant years
+  group_by(country_name, year) %>%
+  summarise(mortality_rate = sum(mortality_rate, na.rm = TRUE)) %>%  # Aggregate by country and year
+  ungroup()
+
+# Create the animated line graph
+malaria_plot_animated1 <- data_for_plot1 %>%
+  plot_ly(
+    x = ~ year,
+    y = ~ mortality_rate,
+    color = ~ country_name,
+    type = 'scatter',
+    mode = 'lines+markers',
+    line = list(width = 2),
+    marker = list(size = 5)
+  ) %>%
+  layout(
+    xaxis = list(title = "Year"),
+    yaxis = list(title = "Rate per 100,000 population at risk")
+  )
+
+```
+
+
+```{r}
+# plot map
+
+# List of countries to focus
+countries <- c("UGA", # ISO code for Uganda
+               "COD", # ISO code for Democratic Republic of the Congo
+               "TZA", # ISO code for Tanzania
+               "MOZ")  # ISO code for Mozambique
+
+# Retrieve shapefile data for selected countries
+south_east <- ne_countries(returnclass = "sf") %>%
+  filter(iso_a3 %in% countries)
+
+# Summarize malaria data by ISO country code and year
+country_summary <- malaria_cases_filtered %>%
+  group_by(iso, year) %>%
+  summarise(total_reported_cases = sum(total_cases),
+            .groups = "drop")
+
+#check
+
+#setdiff(country_summary$iso, south_east$iso_a3)
+#setdiff(south_east$iso_a3, country_summary$iso)
+
+# Merge dataset
+
+south_east_data <- south_east %>%
+  left_join(country_summary, by = c("iso_a3" = "iso"))
+
+# Check merged data for issues
+#print(head(south_east_data))  # Check merged data
+
+## Plot the choropleth map using plot_geo
+interactive_plot <- plot_geo(data = south_east_data) %>%
+  add_trace(
+    type = "choropleth",
+    locations = ~ iso_a3,
+    # Use ISO code (iso_a3) for location
+    z = ~ total_reported_cases,
+    # Use total reported cases for coloring
+    text = ~ paste("Country:", name, "<br>Cases:", total_reported_cases),
+    # Hover text
+    hoverinfo = "text",
+    color = ~ total_reported_cases,
+    # Color by total cases
+    colorscale = "Viridis",
+    # Use a colorscale for color intensity
+    showscale = TRUE,
+    # Show color scale
+    frame = ~ year # Animate over the year variable
+    
+  ) %>%
+  layout(
+    geo = list(
+      scope = "africa",
+      # Set map focus to Africa
+      projection = list(type = "mercator"),
+      # Projection type
+      showland = TRUE,
+      # Show land areas
+      landcolor = "white",
+      # Land color
+      lakecolor = "white"  # Lake color (optional)
+    ),
+    showlegend = FALSE  # Hide legend
+  )
+```
+
+
+
+# Overview
+
+## Row {height="25%"}
+```{r}
+value_box(
+  title = "Incidence",
+ value = incidence_2021,
+  showcase = bsicons::bs_icon("people-fill"),
+  theme = value_box_theme(bg = "#1d646b"),
+ p("per 1000 population | 2021"),
+
+)
+```
+
+```{r}
+value_box(
+  title = "Mortality",
+ value = mortality_2021,
+  showcase = bsicons::bs_icon("file-earmark-medical"),
+  theme = value_box_theme(bg = "#16646b"),
+ p("per 100,000 population | 2021")
+)
+```
+ 
+```{r}
+value_box(
+  title = "Total Cases",
+ value = total_cases_2021,
+  p("confirmed and presumed cases | 2021"),
+  showcase = bsicons::bs_icon("search"),
+  theme = value_box_theme(bg = "#0e7680")
+
+)
+```
+
+## Row 2 {height="75%"}
+
+### {.tabset width="50%"}
+
+#### Incidence Rate 
+```{r}
+inc_plot_animated 
+```
+
+#### Death Rate
+
+```{r}
+mort_plot_animated 
+```
+
+
+### {.tabset width="50%"}
+
+#### Reported cases
+```{r}
+combined_plot
+```
+
+#### Classification
+
+```{r}
+classification_plot
+```
+
+# Country Comparison 
+
+## 
+
+### Row1
+
+####
+
+```{r title = "Estimated Malaria Incidence Rate"}
+malaria_plot_animated
+```
+
+####
+
+```{r title = "Estimated Malaria Mortality Rate"}
+
+malaria_plot_animated1
+```
+
+
+### Column 2
+
+```{r title = "Number of Reported Malaria Cases (confirmed and presumed cases)"}
+interactive_plot
+```
+
+ 
+
+# Data
+
+The data used in this dashboard is shown below and can be downloaded as a csv.
+```{r}
+combined_malaria_data <- bind_rows(
+  malaria_cases %>% mutate(Source = "Malaria Total Cases"),
+  est_mortality %>% mutate(Source = "Estimated Mortality"),
+  est_incidence %>% mutate(Source = "Estimated Incidence"),
+  confirmed_cases %>% mutate(Source = "Confirmed Cases"),
+  imported_cases %>% mutate(Source = "Imported Cases"),
+  indig_cases %>% mutate(Source = "Indigenous Cases"),
+  pf_indig_cases %>% mutate(Source = "P. falciparum Indigenous Cases"),
+  pres_cases %>% mutate(Source = "Presumed Cases"),
+  pv_indig %>% mutate(Source = "P. vivax Indigenous Cases")
+)
+
+# Create an interactive table
+htmltools::browsable(
+  tagList(
+    reactable(
+      combined_malaria_data,
+      elementId = "malaria_data_table",
+      searchable = TRUE,
+      filterable = TRUE,
+      pagination = TRUE,
+      columns = list(
+        Source = colDef(name = "Data Source") # Rename the Source column
+      )
+    ),
+    tags$button("Download as CSV", onclick = "Reactable.downloadDataCSV('malaria_data_table')")
+  )
+)
+```
+
+# About
+
+This dashboard focuses on one of the four high-burden malaria countries located in Eastern and Southern Africa (Democratic Republic of Congo [DRC], Mozambique, Uganda, and Tanzania) between 2011 and 2021.
+
+Malaria remains a significant public health concern. According to the World Malaria Report, in 2022, there were an estimated 247 million malaria cases worldwide in 2021 and 619,000 estimated malaria deaths. Approximately 95% of cases occurred in the African region. 
+
+In 2021, 56,213,475 malaria cases (confirmed and presumed) were reported in Eastern and Southern Africa. The incidence was estimated at 1,020.28 per 1,000 population, and the mortality rate was estimated at 235.15 per 100,000 population in the same year. Between 2011 and 2021, the estimated incidence rate decreased from 1,250 per 1,000 population to 1,020 per 1,000 population at risk. Similarly, the estimated mortality rate decreased from 341 per 100,000 population in 2011 to 235 per 100,000 population in 2021. The majority of cases in Eastern and Southern Africa were indigenous. The total number of reported cases increased steadily over the years, with confirmed cases rising from 8 million in 2011 to 52 million in 2021, while presumed cases declined from 26 million in 2011 to 4 million in 2021.
+
+The estimated malaria incidence in Uganda decreased from 395 per 1,000 population in 2011 to 263 per 1,000 population in 2021. In Tanzania, the estimated incidence remained constant between 2011 and 2021. In the DRC and Mozambique, the estimated incidence remained high during the same period. The total reported cases in the DRC increased from 9,442,144 in 2011 to 16,496,523 in 2021. In Tanzania, the number of reported malaria cases decreased from 10,165,442 in 2011 to 4,465,605 in 2021.
+
+Between 2011 and 2022, the estimated mortality rate per 100,000 population decreased for all four countries, with the DRC and Tanzania experiencing the sharpest declines. However, the estimated mortality rate in Tanzania remained constant. 
+
+
+
+
+
+
+
